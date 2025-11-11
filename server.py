@@ -30,19 +30,18 @@ try:
                     break
                 data = data.decode()
                 print("client send:", data)
-                m = re.fullmatch(r"\s*(\d+)\s*([+\-*/]\s*)", data)
+                m = re.fullmatch(r"\s*(\d+)\s*([+\-*/])\s*(\d+)\s*", data)
                 if not m:
                     conn.sendall(b"invalid expression\n")
                     break
                 num1, op, num2 = m.groups()
-                conn.send(b"I received the data")
+                # conn.send(b"I received the data")
+            ret = {}
+            thread = threading.Thread(target=calulator, args=(int(num1), int(num2), op, ret))
+            thread.start();thread.join()
+            conn.sendall(str(ret['value']).encode())
         finally:
             conn.close()
-        ret = {}
-        thread = threading.Thread(target=calulator, args=(num1, op, num2, ret))
-        conn.send((f"The caculated result is: {ret['value']}").encode())
-        thread.start()
-        thread.join()
 except KeyboardInterrupt:
     print("shutting down")
 finally:
