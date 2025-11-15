@@ -4,10 +4,6 @@ import operator
 import re
 import queue
 
-server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.bind(('127.0.0.1', 8080))
-server.listen(5)
-
 '''
 线程池
 固定线程数量
@@ -24,29 +20,58 @@ server.listen(5)
 挂起/停掉，来任务后再创建
 '''
 
-tasks = queue.Queue()
+class ThreadPool:
+    def __init__(self, num: int = 5):
+        self.threads = []
+        self.tasks = queue.Queue()
+        self._add_threads(num)
 
-def worker():
+    def runner(self):
+        try:
+            task = self.tasks.get()
+            print(self.handler)
+            print(task)
+            self.handler(task)
+        finally:
+            self.tasks.task_done()
+
+    def _add_threads(self, num: int = 1):
+        for _ in range(num):
+            thread = threading.Thread(target=self.runner, daemon=True).start()
+            self.threads.append(thread)
+
+    def add_threads(self, num: int = 1):
+        self._add_threads(num)
+
+    def submit(self, handler, args):
+        self.handler = handler
+        self.tasks.put(args)
+
+def calculator(conn: socket.socket):
     while True:
         try:
-            conn = tasks.get()
             data = (conn.recv(1024)).decode()
-            conn.sendall(str(eval(data)).encode())
-            conn.close()
+            if not data:
+                break
+            tid = threading.current_thread().name
+            print(f'tid={tid} data={data}')
+            ret = eval(data)
+            conn.sendall(str(ret).encode())
         finally:
-            tasks.task_done()
-    
-def new_threads(num: int = 5):
-    for _ in range(num):
-        threading.Thread(target=worker, daemon=True).start()
+            pass
+    conn.close()
+
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server.bind(('127.0.0.1', 8080))
+server.listen(5)
 
 
-new_threads()
 while True:
     try:
-        conn = server.accept()
-        print('server received data')
-        tasks.put(conn)
+        with ThreadPool(5) as thread_pool:
+            conn, _ = server.accept()
+            print('server received data')
+            thread_pool.submit(calculator, conn)
     except KeyboardInterrupt:
         break
 server.close()
