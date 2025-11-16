@@ -21,19 +21,25 @@ import queue
 '''
 
 class ThreadPool:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        for thread in self.threads:
+            thread.join()
+
     def __init__(self, num: int = 5):
         self.threads = []
         self.tasks = queue.Queue()
         self._add_threads(num)
 
     def runner(self):
-        try:
-            task = self.tasks.get()
-            print(self.handler)
-            print(task)
-            self.handler(task)
-        finally:
-            self.tasks.task_done()
+        while True:
+            try:
+                task = self.tasks.get()
+                self.handler(task)
+            finally:
+                self.tasks.task_done()
 
     def _add_threads(self, num: int = 1):
         for _ in range(num):
@@ -47,18 +53,14 @@ class ThreadPool:
         self.handler = handler
         self.tasks.put(args)
 
-def calculator(conn: socket.socket):
-    while True:
-        try:
-            data = (conn.recv(1024)).decode()
-            if not data:
-                break
-            tid = threading.current_thread().name
-            print(f'tid={tid} data={data}')
-            ret = eval(data)
-            conn.sendall(str(ret).encode())
-        finally:
-            pass
+def socket_calculator(conn: socket.socket):
+    data = (conn.recv(1024)).decode()
+    if not data:
+        return
+    tid = threading.current_thread().name
+    print(f'tid={tid} data={data}')
+    ret = eval(data)
+    conn.sendall(str(ret).encode())
     conn.close()
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -71,7 +73,7 @@ while True:
         with ThreadPool(5) as thread_pool:
             conn, _ = server.accept()
             print('server received data')
-            thread_pool.submit(calculator, conn)
+            thread_pool.submit(socket_calculator, conn)
     except KeyboardInterrupt:
         break
 server.close()
