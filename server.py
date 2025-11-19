@@ -111,7 +111,7 @@ def socket_calculator(conn: socket.socket):
             break
         tid = threading.current_thread().name
         print(f'tid={tid} data={data}')
-        time.sleep(3)
+        # time.sleep(3)
         ret = eval(data)
         conn.sendall(str(ret).encode())
     conn.close()
