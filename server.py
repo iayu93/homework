@@ -32,9 +32,10 @@ class Thread:
         self.thread.start()
         print(f'thread: {self.thread.name} started')
 
-    def stop(self):
+    def stop(self, wait: bool = True):
         self.stop_event.set()
-        self.thread.join()
+        if wait:
+            self.thread.join()
 
     def _worker(self):
         while not self.stop_event.is_set():
@@ -60,14 +61,14 @@ class ThreadPool:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         print(f"[Thread pool] __exit__ stopping threads")
-        for thread in self.threads:
-            thread.stop()
+        self.shutdown(wait=True)
         print(f"[Thread pool] __exit__ done")
 
     def __init__(self, handler, num: int = 5):
         self.threads = []
         self.handler = handler
         self.tasks = queue.Queue()
+        self.accepting = True
         self.add_threads(num)
         print(f"ThreadPool tasks queue id={id(self.tasks)}")
 
@@ -90,7 +91,16 @@ class ThreadPool:
         print(f"lenth of thread pool: {len(self.threads)}")
         return removed
 
+    def shutdown(self, wait: bool = False):
+        self.accepting = False
+        if wait:
+            self.tasks.join()
+        for thread in self.threads:
+            thread.stop(wait)
+
     def submit(self, args):
+        if not self.accepting:
+            raise RuntimeError("ThreadPool is shutting down, cannot submit new tasks")
         self.tasks.put(args)
     
 
@@ -101,6 +111,7 @@ def socket_calculator(conn: socket.socket):
             break
         tid = threading.current_thread().name
         print(f'tid={tid} data={data}')
+        time.sleep(3)
         ret = eval(data)
         conn.sendall(str(ret).encode())
     conn.close()
