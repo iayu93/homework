@@ -21,11 +21,11 @@ import time
 挂起/停掉，来任务后再创建
 '''
 class Thread:
-    tasks = queue.Queue()
-    def __init__(self, handler):
+    def __init__(self, handler, task_queue):
         self.stop_event = threading.Event()
         self.free_event = threading.Event()
         self.handler = handler
+        self.tasks = task_queue
         self.thread = threading.Thread(target=self._worker, daemon=True)
 
     def start(self):
@@ -36,19 +36,21 @@ class Thread:
         self.stop_event.set()
         self.thread.join()
 
-    def add_task(self, task):
-        self.tasks.put(task)
-
     def _worker(self):
         while not self.stop_event.is_set():
             try:
-                task = self.tasks.get(True, timeout=5)
-                self.handler(task)
-                self.tasks.task_done()
-            except queue.Empty:
-                pass
-            finally:
                 self.free_event.set()
+                task = self.tasks.get(True, timeout=0.5)
+            except queue.Empty:
+                continue
+
+            self.free_event.clear()
+
+            try:
+                self.handler(task)
+            finally:
+                self.tasks.task_done()
+
         print(f"worker: {threading.current_thread().name} exit")
     
 
@@ -57,32 +59,39 @@ class ThreadPool:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        print(f"[Thread pool] __exit__ stopping threads")
         for thread in self.threads:
             thread.stop()
+        print(f"[Thread pool] __exit__ done")
 
     def __init__(self, handler, num: int = 5):
         self.threads = []
         self.handler = handler
+        self.tasks = queue.Queue()
         self.add_threads(num)
+        print(f"ThreadPool tasks queue id={id(self.tasks)}")
 
     def add_threads(self, num: int = 1):
         for _ in range(num):
-            thread = Thread(self.handler)
+            thread = Thread(self.handler, self.tasks)
             self.threads.append(thread)
             thread.start()
 
     def remove_threads(self, num: int = 2):
         # BUG: 1 : Done
-        while len(self.threads) > 0 or num > 0:
-            thread = self.threads.pop()
+        while len(self.threads) > 0 and num > 0:
+            thread = self.threads[-1]
             if thread.free_event.is_set():
                 # BUG: 2 : Done
+                thread = self.threads.pop()
                 thread.stop()
                 num -= 1
-            time.sleep(5)
+            else:
+                break
+        print(f"lenth of thread pool: {len(self.threads)}")
 
     def submit(self, args):
-        Thread.tasks.put(args)
+        self.tasks.put(args)
     
 
 def socket_calculator(conn: socket.socket):
@@ -100,14 +109,16 @@ server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind(('127.0.0.1', 8080))
 server.listen(5)
 
+pool1 = ThreadPool(socket_calculator, 5)
+pool2 = ThreadPool(socket_calculator, 3)
 while True:
     try:
-        with ThreadPool(socket_calculator, 5) as thread_pool:
-            conn, _ = server.accept()
-            print('server received data')
-            thread_pool.submit(conn)
-            # thread_pool.remove_threads(3)
-            # thread_pool.add_threads(1)
+        conn, _ = server.accept()
+        print('server received data')
+        pool1.submit(conn)
+        pool2.submit(conn)
+        # thread_pool.add_threads(1)
     except KeyboardInterrupt:
         break
+pool1.remove_threads(3)
 server.close()
