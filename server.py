@@ -79,16 +79,16 @@ class ThreadPool:
 
     def remove_threads(self, num: int = 2):
         # BUG: 1 : Done
-        while len(self.threads) > 0 and num > 0:
-            thread = self.threads[-1]
-            if thread.free_event.is_set():
-                # BUG: 2 : Done
-                thread = self.threads.pop()
-                thread.stop()
-                num -= 1
-            else:
+        removed = 0
+        for thread in list(self.threads):
+            if removed >= num:
                 break
+            if thread.free_event.is_set():
+                self.threads.remove(thread)
+                thread.stop()
+                removed += 1
         print(f"lenth of thread pool: {len(self.threads)}")
+        return removed
 
     def submit(self, args):
         self.tasks.put(args)
@@ -110,13 +110,13 @@ server.bind(('127.0.0.1', 8080))
 server.listen(5)
 
 pool1 = ThreadPool(socket_calculator, 5)
-pool2 = ThreadPool(socket_calculator, 3)
+# pool2 = ThreadPool(socket_calculator, 3)
 while True:
     try:
         conn, _ = server.accept()
         print('server received data')
         pool1.submit(conn)
-        pool2.submit(conn)
+        # pool2.submit(conn)
         # thread_pool.add_threads(1)
     except KeyboardInterrupt:
         break
