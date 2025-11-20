@@ -98,17 +98,16 @@ class ThreadPool:
         for thread in self.threads:
             thread.stop(wait)
 
-    def submit(self, args):
+    def submit(self, *args):
         if not self.accepting:
             raise RuntimeError("ThreadPool is shutting down, cannot submit new tasks")
         self.tasks.put(args)
-    
-def handle_connection(conn: socket.socket, pool ThreadPool):
+
+def handle_connection(conn: socket.socket, pool: ThreadPool):
     while True:
-        data = (conn.recv(1024)).decode()
+        data = conn.recv(1024).decode()
         if not data:
             break
-        data_list.append(data)
         tid = threading.current_thread().name
         pool.submit(conn, data)
         print(f'tid={tid} data={data}')
@@ -119,12 +118,6 @@ def calculator(conn: socket.socket, expr: str):
     ret = eval(expr)
     conn.sendall(str(ret).encode())
 
-server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.bind(('127.0.0.1', 8080))
-server.listen(5)
-
-pool1 = ThreadPool(calculator, 5)
-# pool2 = ThreadPool(socket_calculator, 3)
 
 def accept_loop(server: socket.socket, pool: ThreadPool):
     while True:
@@ -136,5 +129,13 @@ def accept_loop(server: socket.socket, pool: ThreadPool):
             # thread_pool.add_threads(1)
         except KeyboardInterrupt:
             break
+
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server.bind(('127.0.0.1', 8080))
+server.listen(5)
+
+pool1 = ThreadPool(calculator, 5)
+# pool2 = ThreadPool(socket_calculator, 3)
+accept_loop(server, pool1)
 pool1.remove_threads(3)
 server.close()
