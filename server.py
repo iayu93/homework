@@ -166,8 +166,10 @@ def accept_loop(server: socket.socket, pool: ThreadPool):
                     data = conn.recv(2048).decode()
                     if not data:
                         break
+                    yjdata: YjProc = json.loads(data)
+                    yjdata.set_sock(get_sock(conn))
+                    pool.submit(yjdata)
                     tid = threading.current_thread().name
-                    pool.submit(conn, data)
                     print(f'tid={tid} data={data}')
             finally: conn.close()
                 
