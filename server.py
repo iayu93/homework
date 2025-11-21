@@ -135,13 +135,42 @@ def handle_connection(conn: socket.socket, pool: ThreadPool):
     finally:
         conn.close()
 
+class YjProc:
+    def __init__(self, handler: callable, data: str, sock: socket.socket = None):
+        self.handler = handler
+        self.data = data
+    def set_sock(self, sock):
+        self.sock = sock
+    def get_sock(self):
+        return self.sock
+
+sock_map = {}
+
+def register_sock(sock):
+    sock_map[id(sock)] = sock
+
+def get_sock(obj_id):
+    return sock_map.get(obj_id)
 
 def accept_loop(server: socket.socket, pool: ThreadPool):
+    sock_queue = queue.Queue()
     while True:
         try:
             conn, _ = server.accept()
             print('server received data')
-            threading.Thread(target=handle_connection, args=(conn, pool), daemon=True).start()
+            register_sock(conn)
+            sock_queue.put(get_sock(conn))
+            # threading.Thread(target=handle_connection, args=(conn, pool), daemon=True).start()
+            try:
+                while True:
+                    data = conn.recv(2048).decode()
+                    if not data:
+                        break
+                    tid = threading.current_thread().name
+                    pool.submit(conn, data)
+                    print(f'tid={tid} data={data}')
+            finally: conn.close()
+                
             # pool2.submit(conn)
             # thread_pool.add_threads(1)
         except KeyboardInterrupt:
